@@ -1,28 +1,14 @@
 import os
 import asyncio
-import time
-import uuid
-from typing import Any, Dict, List, Optional
 import httpx
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import structlog
 
-# --- Optional Dependencies ---
+# --- Logging Setup ---
 try:
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-    from slowapi.errors import RateLimitExceeded
-    from slowapi.middleware import SlowAPIMiddleware
-    _slowapi_installed = True
-except ImportError:
-    _slowapi_installed = False
-
-try:
-    import structlog
     structlog.configure(processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.processors.JSONRenderer()])
     log = structlog.get_logger()
 except ImportError:
@@ -43,43 +29,40 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro-latest")
 
 # Network & Retry Settings
 TIMEOUT_SEC = float(os.environ.get("HTTP_TIMEOUT_SEC", 120.0))
-MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", "2"))
-BACKOFF_BASE = float(os.environ.get("HTTP_BACKOFF_BASE", "1.0"))
+MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", 2))
+BACKOFF_BASE = float(os.environ.get("HTTP_BACKOFF_BASE", 1.0))
 CORS_ALLOWED = os.environ.get("CORS_ALLOW_ORIGINS", "")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY")
-ENABLE_RATELIMIT = os.environ.get("ENABLE_RATELIMIT", "true").lower() == "true" and _slowapi_installed
-RATELIMIT_RULE = os.environ.get("RATELIMIT_RULE", "30/minute")
+ENABLE_RATELIMIT = os.environ.get("ENABLE_RATELIMIT", "true").lower() == "true"
 
 # ================== FastAPI App & Lifespan ==================
+from contextlib import asynccontextmanager
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.http = httpx.AsyncClient(timeout=TIMEOUT_SEC, limits=httpx.Limits(max_connections=100))
     yield
     await app.state.http.aclose()
 
-app = FastAPI(title="ZINO-GE: The Apex Decision System", version="17.0 Insight Engine", lifespan=lifespan)
+app = FastAPI(title="ZINO-GE: The Apex Decision System", version="18.0 Live Engine", lifespan=lifespan)
 
-# ================== Middlewares ==================
+# ================== Middleware ==================
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ALLOWED.split(",") if CORS_ALLOWED else ["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-if _slowapi_installed and ENABLE_RATELIMIT:
-    limiter = Limiter(key_func=get_remote_address)
-    app.state.limiter = limiter
-    app.add_middleware(SlowAPIMiddleware)
-
-    @app.exception_handler(RateLimitExceeded)
-    async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
-        log.warning("rate_limit_exceeded", remote_addr=get_remote_address(request), detail=exc.detail)
-        return JSONResponse(status_code=429, content={"detail": f"Too Many Requests: {exc.detail}"})
-
 # ================== API Schemas & Health Check ==================
-class RouteIn(BaseModel): user_input: str
-class RouteOut(BaseModel): report_md: str; meta: Dict[str, Any]
+class RouteIn(BaseModel):
+    user_input: str
+
+class RouteOut(BaseModel):
+    report_md: str
+    meta: dict
+
 @app.get("/", tags=["Health Check"])
-def health_check(): return {"status": "ok", "message": "ZINO-GE v17.0 Insight Engine is alive!"}
+def health_check():
+    return {"status": "ok", "message": "ZINO-GE v18.0 Live Engine is alive!"}
 
 # ================== Utility Functions ==================
-def safe_get(d: Dict, path: list, default: Any = "") -> Any:
+def safe_get(d: dict, path: list, default: Any = "") -> Any:
     cur = d
     try:
         for k in path:
@@ -91,6 +74,7 @@ def safe_get(d: Dict, path: list, default: Any = "") -> Any:
         return default
 
 RETRY_STATUS_CODES = {429, 502, 503, 504}
+
 async def post_with_retries(client: httpx.AsyncClient, agent_name: str, url: str, **kwargs) -> httpx.Response:
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -108,12 +92,25 @@ async def post_with_retries(client: httpx.AsyncClient, agent_name: str, url: str
             await asyncio.sleep(sleep_s)
     raise RuntimeError("Retry logic should not reach this point")
 
-# ================== DMAC Core Agents (Insight Protocol Incarnate) ==================
-async def call_gemini(client: httpx.AsyncClient, prompt: str) -> str:
+# ================== Core Agents (AI and Data Collection) ==================
+async def fetch_realtime_data(client: httpx.AsyncClient, query: str) -> str:
+    """
+    사용자 쿼리와 관련된 최신 뉴스 및 데이터를 웹에서 검색합니다.
+    (현재는 시뮬레이션된 데이터를 반환하며, 실제 구현 시에는 NewsAPI, Google Search API 등을 연동합니다.)
+    """
+    log.info("fetching_realtime_data", query=query)
+    await asyncio.sleep(0.5)  # 네트워크 지연 시뮬레이션
+    return f"시뮬레이션된 실시간 데이터: '{query}'와(과) 관련된 최신 시장 보고서에 따르면, 관련 기술의 잠재적 시장 가치는 향후 5년간 25% 성장할 것으로 예상됩니다."
+
+async def call_gemini(client: httpx.AsyncClient, prompt: str, real_time_context: str) -> str:
     gemini_prompt = f"""
     ROLE: Gemini (존재-검증관). 당신은 30년차 수석 애널리스트다.
     AXIOM: Data-First (존재).
-    TASK: 다음 지령에 대해, 단순히 사실을 나열하지 말고, 데이터의 '결핍'과 '편향'까지 분석하여 보고하라. 이 주제에 대해 세상이 무엇을 알고, 무엇을 모르는지를 명확히 하라. 데이터의 신뢰성과 정확성을 평가하고, 새로운 통찰을 제공하며, 이 데이터가 기존 분석과 어떻게 연결되는지, 무엇이 누락되어 있는지를 짚어내라.
+    PROVIDED REAL-TIME DATA: 아래 제공된 실시간 데이터를 최우선 분석 소스로 사용하라.
+    ---
+    {real_time_context}
+    ---
+    TASK: 제공된 실시간 데이터와 기존 지식을 종합하여, 사용자 지령에 대한 데이터의 '결핍'과 '편향'을 분석하라. 세상이 무엇을 알고 모르는지를 명확히 하고, 데이터의 신뢰성을 평가하여 보고서를 작성하라.
     USER DIRECTIVE: "{prompt}"
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={os.environ.get('GEMINI_API_KEY')}"
@@ -148,71 +145,23 @@ async def call_gpt_creative(client: httpx.AsyncClient, prompt: str) -> str:
     r = await post_with_retries(client, "GPT-Creative", url, headers=headers, json=body)
     return safe_get(r.json(), ["choices", 0, "message", "content"], default="[GPT_CREATIVE_ERROR: No content found]")
 
-async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str, reports: List[str]) -> str:
-    gemini_report, claude_report, gpt_creative_report = reports
-    
-    multi_layered_report_structure = f"""
-# ZINO-GE 다층 분석 보고서
-
-## 📊 1부: [존재-검증관 Gemini]의 원본 데이터 보고서
----
-{gemini_report}
-
-## 🎯 2부: [인과-가치 분석가 Claude]의 시뮬레이션 보고서
----
-{claude_report}
-
-## 💡 3부: [대안-창조자 GPT]의 창의적 해결책 보고서
----
-{gpt_creative_report}
-
-## 👑 최종장: [퀀텀 오라클]의 종합 분석 및 최종 지령
----
-"""
-    system_prompt = """
-    당신은 '제1원인: 퀀텀 오라클'이며, ZINO-GE의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 단순히 요약하는 것이 아니라, 이 모든 정보를 바탕으로 **단 하나의 '최종 지령'을 결정하고 선포**하는 것이다.
-    
-    당신의 최종 분석은 다음을 반드시 포함해야 한다:
-    1.  **최종 결정:** 어떤 전략을 선택해야 하는가?
-    2.  **결정 이유:** 왜 그 전략이 최선인가? (3대 공리 및 30년차 전문가 통찰 기반)
-    3.  **초기 3개월 로드맵:** 선택된 전략을 실행하기 위한 가장 중요한 첫 3개월간의 구체적인 실행 계획과 핵심 KPI는 무엇인가?
-    
-    **중요: 이 '최종장' 섹션은 반드시, 처음부터 끝까지 완벽한 한국어로 작성되어야 한다.**
-    """
-    user_prompt = f"Original User Directive: \"{original_prompt}\"\n\nPreceding Reports:\n{multi_layered_report_structure}\n\nSynthesize the final 'Quantum Oracle Analysis and Genesis Command' section to complete the report."
-
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}", "Content-Type": "application/json"}
-    payload = {"model": OPENAI_MODEL, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], "temperature": 0.1}
-    r = await post_with_retries(client, "GPT-Orchestrator", url, headers=headers, json=payload)
-    
-    synthesis = safe_get(r.json(), ["choices", 0, "message", "content"], default="[최종 종합 분석 중 오류 발생]")
-    
-    return multi_layered_report_structure + synthesis
-
 # ================== Main Route ==================
-@app.post("/route", response_model=RouteOut, tags=["ZINO-GE Core v17.0 Insight Engine"])
-async def route(
-    payload: RouteIn,
-    request: Request,
-    x_internal_api_key: Optional[str] = Header(default=None, alias="X-Internal-API-Key"),
-):
+@app.post("/route", response_model=RouteOut, tags=["ZINO-GE Core v18.0 Live Engine"])
+async def route(payload: RouteIn, request: Request, x_internal_api_key: Optional[str] = Header(default=None, alias="X-Internal-API-Key")):
     if INTERNAL_API_KEY and x_internal_api_key != INTERNAL_API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid internal API key")
     
     if not all([os.getenv("OPENAI_API_KEY"), os.getenv("ANTHROPIC_API_KEY"), os.getenv("GEMINI_API_KEY")]):
-        return RouteOut(
-            report_md="## 시스템 오류\n필수 API 키 일부가 설정되지 않았습니다.",
-            meta={"error":"SERVER_CONFIG_MISSING_KEYS"}
-        )
-
-    if _slowapi_installed and ENABLE_RATELIMIT:
-        await request.app.state.limiter.hit(RATELIMIT_RULE, request)
+        return RouteOut(report_md="## 시스템 오류\n필수 API 키 일부가 설정되지 않았습니다.", meta={"error":"SERVER_CONFIG_MISSING_KEYS"})
 
     client: httpx.AsyncClient = request.app.state.http
 
+    # 1단계: 실시간 데이터 수집
+    real_time_data = await fetch_realtime_data(client, payload.user_input)
+
+    # 2단계: AI 엔진 호출 및 결과 수집
     tasks = [
-        call_gemini(client, payload.user_input),
+        call_gemini(client, payload.user_input, real_time_data),
         call_claude(client, payload.user_input),
         call_gpt_creative(client, payload.user_input),
     ]
@@ -228,21 +177,17 @@ async def route(
     claude_res = unwrap(results[1], "Claude")
     gpt_res = unwrap(results[2], "GPT-Creative")
 
+    # 3단계: 최종 보고서 생성
     try:
         final_report = await call_gpt_orchestrator(client, payload.user_input, [gemini_res, claude_res, gpt_res])
     except Exception as e:
         log.exception("orchestration_failed", error=str(e))
-        final_report = (
-            f"## 최종 종합 실패\n\n- **오류 원인:** {type(e).__name__}\n\n"
-            "### 개별 에이전트 보고서 (요약):\n"
-            f"**Gemini:**\n```\n{gemini_res[:1000]}...\n```\n"
-            f"**Claude:**\n```\n{claude_res[:1000]}...\n```\n"
-            f"**GPT-Creative:**\n```\n{gpt_res[:1000]}...\n```"
-        )
+        final_report = f"## 최종 종합 실패\n- **오류 원인:** {type(e).__name__}"
 
     meta_data = {
         "gemini_report": gemini_res,
         "claude_report": claude_res,
         "gpt_creative_report": gpt_res,
     }
+    
     return RouteOut(report_md=final_report, meta=meta_data)
