@@ -43,8 +43,8 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro-latest")
 
 # Network & Retry Settings
 TIMEOUT_SEC = float(os.environ.get("HTTP_TIMEOUT_SEC", 120.0))
-MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", 2))
-BACKOFF_BASE = float(os.environ.get("HTTP_BACKOFF_BASE", 1.0))
+MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", "2"))
+BACKOFF_BASE = float(os.environ.get("HTTP_BACKOFF_BASE", "1.0"))
 CORS_ALLOWED = os.environ.get("CORS_ALLOW_ORIGINS", "")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY")
 ENABLE_RATELIMIT = os.environ.get("ENABLE_RATELIMIT", "true").lower() == "true" and _slowapi_installed
