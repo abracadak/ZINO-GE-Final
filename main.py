@@ -124,11 +124,18 @@ async def call_gpt_creative(client: httpx.AsyncClient, prompt: str) -> str:
     return r.json()["choices"][0]["message"]["content"]
 
 async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str, reports: list[str]) -> str:
-    system_prompt = "You are 'The First Cause: Quantum Oracle'..."
-    user_prompt = f"Original User Directive: \"{original_prompt}\"\n---\n[Report 1]...{reports[0]}\n---\n[Report 2]...{reports[1]}\n---\n[Report 3]...{reports[2]}\n---\nSynthesize."
+    system_prompt = """
+    당신은 '제1원인: 퀀텀 오라클'이며, GCI의 최종 집행관이다. 
+    아래 3개의 독립적인 전문가 보고서를 종합하여, '창조명령권자 지노이진호'를 위한 단 하나의, 실행 가능한 '창세기 지령'을 생성하라.
+    당신의 종합 보고서는 3대 공리(존재, 인과, 가치)에 의해 교차 검증되어야 하며, 최상위 지령인 '레독스톤(이오나이트) 사업의 성공'에 기여해야 한다.
+
+    **중요: 최종 결과물은 반드시, 처음부터 끝까지 완벽한 한국어로 작성되어야 한다.**
+    """
+    user_prompt = f"Original User Directive: \"{original_prompt}\"\n---\n[Report 1: Data Provenance]\n{reports[0]}\n---\n[Report 2: Strategic Simulation]\n{reports[1]}\n---\n[Report 3: Creative Alternatives]\n{reports[2]}\n---\nSynthesize the final Genesis Command."
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
     payload = {"model": OPENAI_MODEL, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], "temperature": 0.1}
+    
     r = await post_with_retries(client, url, headers=headers, json=payload)
     return r.json()["choices"][0]["message"]["content"]
 
