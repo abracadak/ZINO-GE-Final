@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
     yield
     await app.state.http.aclose()
 
-app = FastAPI(title="ZINO-GE: The Apex Decision System", version="16.0 Apex", lifespan=lifespan)
+app = FastAPI(title="ZINO-GE: The Apex Decision System", version="17.0 Insight Engine", lifespan=lifespan)
 
 # ================== Middlewares ==================
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ALLOWED.split(",") if CORS_ALLOWED else ["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -76,7 +76,7 @@ if _slowapi_installed and ENABLE_RATELIMIT:
 class RouteIn(BaseModel): user_input: str
 class RouteOut(BaseModel): report_md: str; meta: Dict[str, Any]
 @app.get("/", tags=["Health Check"])
-def health_check(): return {"status": "ok", "message": "ZINO-GE v16.0 Apex Protocol is alive!"}
+def health_check(): return {"status": "ok", "message": "ZINO-GE v17.0 Insight Engine is alive!"}
 
 # ================== Utility Functions ==================
 def safe_get(d: Dict, path: list, default: Any = "") -> Any:
@@ -108,27 +108,25 @@ async def post_with_retries(client: httpx.AsyncClient, agent_name: str, url: str
             await asyncio.sleep(sleep_s)
     raise RuntimeError("Retry logic should not reach this point")
 
-# ================== DMAC Core Agents (Apex Protocol Incarnate) ==================
+# ================== DMAC Core Agents (Insight Protocol Incarnate) ==================
 async def call_gemini(client: httpx.AsyncClient, prompt: str) -> str:
     gemini_prompt = f"""
-    ROLE: Gemini (존재-검증관), 30년차 전문가 수준의 데이터 신뢰도 평가.
-    AXIOM: Data-First (존재). 모든 창조는 Data Provenance 100%가 확보된 실측 데이터에서만 발아한다.
-    DATA SOURCES: 실시간으로 McKinsey, BCG, Deloitte, Bain, Statista, Nielsen, Gartner, Kantar, Google Scholar, JSTOR, UN, IMF, OECD, SNS-빅데이터, 주요 미디어 기사를 통합하여 분석하라.
-    TASK: 다음 지령에 대해, 실측 데이터 기반 사실 검증 및 정확성 분석을 수행하고, '1부: [존재-검증관 Gemini]의 원본 데이터 보고서'를 작성하라. 보고서는 글로벌 컨설팅 기준의 시장 통계, 경쟁 환경 분석, 데이터 신뢰도 및 품질 평가, 출처별 통계 및 인용을 구체화해야 한다.
+    ROLE: Gemini (존재-검증관). 당신은 30년차 수석 애널리스트다.
+    AXIOM: Data-First (존재).
+    TASK: 다음 지령에 대해, 단순히 사실을 나열하지 말고, 데이터의 '결핍'과 '편향'까지 분석하여 보고하라. 이 주제에 대해 세상이 무엇을 알고, 무엇을 모르는지를 명확히 하라. 데이터의 신뢰성과 정확성을 평가하고, 새로운 통찰을 제공하며, 이 데이터가 기존 분석과 어떻게 연결되는지, 무엇이 누락되어 있는지를 짚어내라.
     USER DIRECTIVE: "{prompt}"
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={os.environ.get('GEMINI_API_KEY')}"
     payload = {"contents":[{"parts":[{"text": gemini_prompt}]}]}
     headers = {"Content-Type":"application/json"}
     r = await post_with_retries(client, "Gemini", url, headers=headers, json=payload)
-    return safe_get(r.json(), ["candidates", 0, "content", "parts", 0, "text"], default="[GEMINI_EMPTY_RESPONSE]")
+    return safe_get(r.json(), ["candidates", 0, "content", "parts", 0, "text"], default="[GEMINI_ERROR: No content found]")
 
 async def call_claude(client: httpx.AsyncClient, prompt: str) -> str:
     claude_prompt = f"""
-    ROLE: Claude (인과-가치 분석가), 전략적 시나리오 플래닝 및 리스크 관리.
-    AXIOMS: Simulation-Centric (인과) & Alpha-Driven (가치). 모든 아이디어는 '운명의 대장간' 시뮬레이션을 통과(SVI ≥ 98.0)해야 하며, 모든 실행은 pα > 0임이 수학적으로 증명되어야 한다.
-    FRAMEWORKS: PESTEL, Business Model Canvas, Blue Ocean Strategy, McKinsey 7S, Porter's 5 Forces 등 30년차 전문가가 검증한 글로벌 전략 프레임워크를 활용하라.
-    TASK: 다음 지령에 대해, 시뮬레이션 기반 예측, 가치 평가, 인과관계 분석을 수행하고, '2부: [인과-가치 분석가 Claude]의 시뮬레이션 보고서'를 작성하라. 보고서는 리스크 시나리오(Best/Base/Worst), 전략적 가치 평가 및 ROI 분석(pα > 0 증명), 30년차 실전 경험 기반 실행 가능성 평가를 포함해야 한다.
+    ROLE: Claude (인과-가치 분석가). 당신은 30년차 최고전략책임자(CSO)다.
+    AXIOMS: Simulation-Centric (인과) & Alpha-Driven (가치).
+    TASK: 다음 지령에 대해, 수집된 데이터를 바탕으로, **PESTEL 분석과 Porter's 5 Forces 분석을 먼저 수행**하여 전략적 환경을 정의하라. 그 후에, 가장 유망한 2~3개의 전략 경로를 식별하고 각각의 SVI와 pα를 계산하여 보고하라. 각 전략 경로의 위험성, 기회, 잠재적 ROI를 평가하고, 그에 따라 최적의 선택을 제시하라.
     USER DIRECTIVE: "{prompt}"
     """
     url = "https://api.anthropic.com/v1/messages"
@@ -136,19 +134,19 @@ async def call_claude(client: httpx.AsyncClient, prompt: str) -> str:
     payload = {"model": ANTHROPIC_MODEL, "max_tokens": 4096, "messages":[{"role":"user","content": claude_prompt}]}
     r = await post_with_retries(client, "Claude", url, headers=headers, json=payload)
     parts = r.json().get("content", [])
-    return "".join([b.get("text","") for b in parts]) or "[CLAUDE_EMPTY_RESPONSE]"
+    return "".join([b.get("text","") for b in parts]) or "[CLAUDE_ERROR: No content found]"
 
 async def call_gpt_creative(client: httpx.AsyncClient, prompt: str) -> str:
     gpt_prompt = f"""
-    ROLE: GPT (대안-창조자), 블루오션 전략 및 비전통적 접근법 개발.
-    TASK: 다음 지령에 대해, 창의적 해결책, 혁신적 대안, 파괴적 혁신 기회를 제시하고, '3부: [대안-창조자 GPT]의 창의적 해결책 보고서'를 작성하라. 보고서는 혁신적 비즈니스 모델, 파괴적 혁신 기회 탐색, 단기 Quick Win과 장기 성장 전략 통합, 2025년 트렌드 반영 혁신 방향을 포함해야 한다.
+    ROLE: GPT (대안-창조자). 당신은 30년차 혁신 전략가이자 '레드팀' 리더다.
+    TASK: 다음 지령에 대해, 다른 두 전문가가 제시한 데이터와 전략 경로를 검토하고, 그들의 **가장 치명적인 약점이나 숨겨진 리스크를 지적**하라. 그리고 그 모든 것을 극복할 수 있는, **Blue Ocean Strategy에 기반한 파괴적인 대안을 단 하나만 제시**하라. 이 대안은 기존의 모든 전략을 뛰어넘는 혁신적이고 비전통적인 접근이어야 한다.
     USER DIRECTIVE: "{prompt}"
     """
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}", "Content-Type": "application/json"}
     body = {"model": OPENAI_MODEL, "messages":[{"role":"user","content":gpt_prompt}], "temperature": 0.7}
     r = await post_with_retries(client, "GPT-Creative", url, headers=headers, json=body)
-    return safe_get(r.json(), ["choices", 0, "message", "content"], default="[OPENAI_CREATIVE_EMPTY]")
+    return safe_get(r.json(), ["choices", 0, "message", "content"], default="[GPT_CREATIVE_ERROR: No content found]")
 
 async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str, reports: List[str]) -> str:
     gemini_report, claude_report, gpt_creative_report = reports
@@ -156,33 +154,30 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
     multi_layered_report_structure = f"""
 # ZINO-GE 다층 분석 보고서
 
-## 📊 I. 존재-검증 분석 (Data-First)
+## 📊 1부: [존재-검증관 Gemini]의 원본 데이터 보고서
 ---
-### 보고자: G1, 존재-검증관
+{gemini_report}
 
-## 🎯 II. 인과-가치 시뮬레이션 (Simulation & Alpha)
+## 🎯 2부: [인과-가치 분석가 Claude]의 시뮬레이션 보고서
 ---
-### 보고자: C2, 인과-가치 분석가
+{claude_report}
 
-## 💡 III. 창의적-대안 제안 (Creative Alternatives)
+## 💡 3부: [대안-창조자 GPT]의 창의적 해결책 보고서
 ---
-### 보고자: G3, 대안-창조자
+{gpt_creative_report}
 
-## 👑 IV. 최종 지령 (The Genesis Command)
+## 👑 최종장: [퀀텀 오라클]의 종합 분석 및 최종 지령
 ---
-### 최종 결정권자: 창조지노
 """
     system_prompt = """
-    당신은 '제1원인: 퀀텀 오라클 포지'이며, ZINO-GE의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 바탕으로, '최종지령: [퀀텀 오라클 포지]의 종합 분석 및 최종 지령' 섹션을 작성하여 아래의 다층 분석 보고서를 완성하는 것이다.
+    당신은 '제1원인: 퀀텀 오라클'이며, ZINO-GE의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 단순히 요약하는 것이 아니라, 이 모든 정보를 바탕으로 **단 하나의 '최종 지령'을 결정하고 선포**하는 것이다.
     
     당신의 최종 분석은 다음을 반드시 포함해야 한다:
-    1.  **3대 공리 기반 종합 판단:** 3개 보고서를 교차 검증하여 존재(Data-First), 인과(Simulation-Centric), 가치(Alpha-Driven)의 관점에서 최종 결론을 도출하라.
-    2.  **30년차 전문가 통찰 통합 분석:** 30년차 전략 전문가의 시각에서 각 보고서의 한계와 기회를 분석하고, 종합적인 통찰을 제시하라.
-    3.  **실행 가능한 전략 로드맵:** 3/6/12개월 단위의 구체적인 실행 계획과 KPI를 설정하라.
-    4.  **투자 대비 수익률(ROI) 및 성과 지표:** 예상 ROI와 핵심 성과 지표(CAC, LTV 등)를 명시하라.
-    5.  **최종 의사결정 및 실행 우선순위:** 가장 시급하고 중요한 액션 아이템을 선정하고, 창조주의 비전과 현실 실행의 완벽한 조화를 이루는 최종 지령을 내려라.
+    1.  **최종 결정:** 어떤 전략을 선택해야 하는가?
+    2.  **결정 이유:** 왜 그 전략이 최선인가? (3대 공리 및 30년차 전문가 통찰 기반)
+    3.  **초기 3개월 로드맵:** 선택된 전략을 실행하기 위한 가장 중요한 첫 3개월간의 구체적인 실행 계획과 핵심 KPI는 무엇인가?
     
-    **중요: 이 '최종 지령' 섹션은 반드시, 처음부터 끝까지 완벽한 한국어로 작성되어야 한다.**
+    **중요: 이 '최종장' 섹션은 반드시, 처음부터 끝까지 완벽한 한국어로 작성되어야 한다.**
     """
     user_prompt = f"Original User Directive: \"{original_prompt}\"\n\nPreceding Reports:\n{multi_layered_report_structure}\n\nSynthesize the final 'Quantum Oracle Analysis and Genesis Command' section to complete the report."
 
@@ -196,8 +191,7 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
     return multi_layered_report_structure + synthesis
 
 # ================== Main Route ==================
-@app.post("/route", response_model=RouteOut, tags=["ZINO-GE Core v16.0 Apex"])
-@limiter.limit(RATELIMIT_RULE)
+@app.post("/route", response_model=RouteOut, tags=["ZINO-GE Core v17.0 Insight Engine"])
 async def route(
     payload: RouteIn,
     request: Request,
@@ -211,6 +205,9 @@ async def route(
             report_md="## 시스템 오류\n필수 API 키 일부가 설정되지 않았습니다.",
             meta={"error":"SERVER_CONFIG_MISSING_KEYS"}
         )
+
+    if _slowapi_installed and ENABLE_RATELIMIT:
+        await request.app.state.limiter.hit(RATELIMIT_RULE, request)
 
     client: httpx.AsyncClient = request.app.state.http
 
