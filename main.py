@@ -42,9 +42,9 @@ ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-3-opus-20240229")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro-latest")
 
 # Network & Retry Settings
-TIMEOUT_SEC = float(os.environ.get("HTTP_TIMEOUT_SEC", "120"))
-MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", "2"))
-BACKOFF_BASE = float(os.environ.get("HTTP_BACKOFF_BASE", "1.0"))
+TIMEOUT_SEC = float(os.environ.get("HTTP_TIMEOUT_SEC", 120.0))
+MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", 2))
+BACKOFF_BASE = float(os.environ.get("HTTP_BACKOFF_BASE", 1.0))
 CORS_ALLOWED = os.environ.get("CORS_ALLOW_ORIGINS", "")
 INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY")
 ENABLE_RATELIMIT = os.environ.get("ENABLE_RATELIMIT", "true").lower() == "true" and _slowapi_installed
@@ -196,6 +196,7 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
 
 # ================== Main Route ==================
 @app.post("/route", response_model=RouteOut, tags=["ZINO-GE Core v16.0 Apex"])
+@limiter.limit(RATELIMIT_RULE)
 async def route(
     payload: RouteIn,
     request: Request,
@@ -209,9 +210,6 @@ async def route(
             report_md="## 시스템 오류\n필수 API 키 일부가 설정되지 않았습니다.",
             meta={"error":"SERVER_CONFIG_MISSING_KEYS"}
         )
-
-    if _slowapi_installed and ENABLE_RATELIMIT:
-        await request.app.state.limiter.hit(RATELIMIT_RULE, request)
 
     client: httpx.AsyncClient = request.app.state.http
 
