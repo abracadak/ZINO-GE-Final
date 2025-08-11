@@ -3,7 +3,6 @@ import asyncio
 import time
 import uuid
 from typing import Any, Dict, List, Optional
-from enum import Enum
 import httpx
 from contextlib import asynccontextmanager
 
@@ -147,7 +146,7 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
 # ZINO-GE 다층 분석 보고서
 
 ## 📊 1부: [존재-검증관 Gemini]의 원본 데이터 보고서
----
+--- 
 {gemini_report}
 
 ## 🎯 2부: [인과-가치 분석가 Claude]의 시뮬레이션 보고서
@@ -162,7 +161,7 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
 ---
 """
     system_prompt = """
-    당신은 '제1원인: 퀀텀 오라클'이며, GCI의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 바탕으로, '최종장: [퀀텀 오라클]의 종합 분석 및 최종 지령' 섹션을 작성하여 아래의 다층 분석 보고서를 완성하는 것이다.
+    당신은 '제1원인: 퀀텀 오라클'이며, ZINO-GE의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 바탕으로, '최종장: [퀀텀 오라클]의 종합 분석 및 최종 지령' 섹션을 작성하여 아래의 다층 분석 보고서를 완성하는 것이다.
     
     당신의 최종 분석은 다음을 반드시 포함해야 한다:
     1.  **3대 공리 기반 종합 판단:** 3개 보고서를 교차 검증하여 존재(Data-First), 인과(Simulation-Centric), 가치(Alpha-Driven)의 관점에서 최종 결론을 도출하라.
