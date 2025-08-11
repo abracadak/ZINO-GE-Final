@@ -5,7 +5,6 @@ import uuid
 from typing import Any, Dict, List, Optional
 import httpx
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -190,52 +189,59 @@ async def route(
     request: Request,
     x_internal_api_key: Optional[str] = Header(default=None, alias="X-Internal-API-Key"),
 ):
-    if INTERNAL_API_KEY and x_internal_api_key != INTERNAL_API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid internal API key")
-    
-    if not all([os.getenv("OPENAI_API_KEY"), os.getenv("ANTHROPIC_API_KEY"), os.getenv("GEMINI_API_KEY")]):
-        return RouteOut(
-            report_md="## 시스템 오류\n필수 API 키 일부가 설정되지 않았습니다.",
-            meta={"error":"SERVER_CONFIG_MISSING_KEYS"}
-        )
-
-    if _slowapi_installed and ENABLE_RATELIMIT:
-        await request.app.state.limiter.hit(RATELIMIT_RULE, request)
-
-    client: httpx.AsyncClient = request.app.state.http
-
-    tasks = [
-        call_gemini(client, payload.user_input),
-        call_claude(client, payload.user_input),
-        call_gpt_creative(client, payload.user_input),
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    def unwrap(res: Any, agent_name: str) -> str:
-        if isinstance(res, Exception):
-            log.error("agent_call_failed", agent=agent_name, error=str(res))
-            return f"[{agent_name} 에이전트 오류: {type(res).__name__}]"
-        return res
-
-    gemini_res = unwrap(results[0], "Gemini")
-    claude_res = unwrap(results[1], "Claude")
-    gpt_res = unwrap(results[2], "GPT-Creative")
-
     try:
-        final_report = await call_gpt_orchestrator(client, payload.user_input, [gemini_res, claude_res, gpt_res])
-    except Exception as e:
-        log.exception("orchestration_failed", error=str(e))
-        final_report = (
-            f"## 최종 종합 실패\n\n- **오류 원인:** {type(e).__name__}\n\n"
-            "### 개별 에이전트 보고서 (요약):\n"
-            f"**Gemini:**\n\n{gemini_res[:1000]}...\n\n"
-            f"**Claude:**\n\n{claude_res[:1000]}...\n\n"
-            f"**GPT-Creative:**\n\n{gpt_res[:1000]}...\n"
-        )
+        if INTERNAL_API_KEY and x_internal_api_key != INTERNAL_API_KEY:
+            log.error(f"Unauthorized access attempt with API key: {x_internal_api_key}")
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid internal API key")
+        
+        if not all([os.getenv("OPENAI_API_KEY"), os.getenv("ANTHROPIC_API_KEY"), os.getenv("GEMINI_API_KEY")]):
+            log.error("Missing API keys in the server environment.")
+            return RouteOut(
+                report_md="## 시스템 오류\n필수 API 키 일부가 설정되지 않았습니다.",
+                meta={"error":"SERVER_CONFIG_MISSING_KEYS"}
+            )
 
-    meta_data = {
-        "gemini_report": gemini_res,
-        "claude_report": claude_res,
-        "gpt_creative_report": gpt_res,
-    }
-    return RouteOut(report_md=final_report, meta=meta_data)
+        if _slowapi_installed and ENABLE_RATELIMIT:
+            await request.app.state.limiter.hit(RATELIMIT_RULE, request)
+
+        client: httpx.AsyncClient = request.app.state.http
+
+        tasks = [
+            call_gemini(client, payload.user_input),
+            call_claude(client, payload.user_input),
+            call_gpt_creative(client, payload.user_input),
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        def unwrap(res: Any, agent_name: str) -> str:
+            if isinstance(res, Exception):
+                log.error("agent_call_failed", agent=agent_name, error=str(res))
+                return f"[{agent_name} 에이전트 오류: {type(res).__name__}]"
+            return res
+
+        gemini_res = unwrap(results[0], "Gemini")
+        claude_res = unwrap(results[1], "Claude")
+        gpt_res = unwrap(results[2], "GPT-Creative")
+
+        try:
+            final_report = await call_gpt_orchestrator(client, payload.user_input, [gemini_res, claude_res, gpt_res])
+        except Exception as e:
+            log.exception("orchestration_failed", error=str(e))
+            final_report = (
+                f"## 최종 종합 실패\n\n- **오류 원인:** {type(e).__name__}\n\n"
+                "### 개별 에이전트 보고서 (요약):\n"
+                f"**Gemini:**\n\n{gemini_res[:1000]}...\n\n"
+                f"**Claude:**\n\n{claude_res[:1000]}...\n\n"
+                f"**GPT-Creative:**\n\n{gpt_res[:1000]}...\n"
+            )
+
+        meta_data = {
+            "gemini_report": gemini_res,
+            "claude_report": claude_res,
+            "gpt_creative_report": gpt_res,
+        }
+        return RouteOut(report_md=final_report, meta=meta_data)
+
+    except Exception as e:
+        log.exception("Unexpected error during route processing", error=str(e))
+        raise HTTPException(status_code=500, detail="Unexpected server error")
