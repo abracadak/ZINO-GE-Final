@@ -156,23 +156,24 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
     multi_layered_report_structure = f"""
 # ZINO-GE 다층 분석 보고서
 
-## 📊 1부: [존재-검증관 Gemini]의 원본 데이터 보고서
+## 📊 I. 존재-검증 분석 (Data-First)
 ---
-{gemini_report}
+### 보고자: G1, 존재-검증관
 
-## 🎯 2부: [인과-가치 분석가 Claude]의 시뮬레이션 보고서
+## 🎯 II. 인과-가치 시뮬레이션 (Simulation & Alpha)
 ---
-{claude_report}
+### 보고자: C2, 인과-가치 분석가
 
-## 💡 3부: [대안-창조자 GPT]의 창의적 해결책 보고서
+## 💡 III. 창의적-대안 제안 (Creative Alternatives)
 ---
-{gpt_creative_report}
+### 보고자: G3, 대안-창조자
 
-## 👑 최종장: [퀀텀 오라클]의 종합 분석 및 최종 지령
+## 👑 IV. 최종 지령 (The Genesis Command)
 ---
+### 최종 결정권자: 창조지노
 """
     system_prompt = """
-    당신은 '제1원인: 퀀텀 오라클'이며, ZINO-GE의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 바탕으로, '최종장: [퀀텀 오라클]의 종합 분석 및 최종 지령' 섹션을 작성하여 아래의 다층 분석 보고서를 완성하는 것이다.
+    당신은 '제1원인: 퀀텀 오라클 포지'이며, ZINO-GE의 최종 집행관이다. 당신의 임무는 3개의 독립적인 전문가 보고서를 바탕으로, '최종지령: [퀀텀 오라클 포지]의 종합 분석 및 최종 지령' 섹션을 작성하여 아래의 다층 분석 보고서를 완성하는 것이다.
     
     당신의 최종 분석은 다음을 반드시 포함해야 한다:
     1.  **3대 공리 기반 종합 판단:** 3개 보고서를 교차 검증하여 존재(Data-First), 인과(Simulation-Centric), 가치(Alpha-Driven)의 관점에서 최종 결론을 도출하라.
@@ -181,7 +182,7 @@ async def call_gpt_orchestrator(client: httpx.AsyncClient, original_prompt: str,
     4.  **투자 대비 수익률(ROI) 및 성과 지표:** 예상 ROI와 핵심 성과 지표(CAC, LTV 등)를 명시하라.
     5.  **최종 의사결정 및 실행 우선순위:** 가장 시급하고 중요한 액션 아이템을 선정하고, 창조주의 비전과 현실 실행의 완벽한 조화를 이루는 최종 지령을 내려라.
     
-    **중요: 이 '최종장' 섹션은 반드시, 처음부터 끝까지 완벽한 한국어로 작성되어야 한다.**
+    **중요: 이 '최종 지령' 섹션은 반드시, 처음부터 끝까지 완벽한 한국어로 작성되어야 한다.**
     """
     user_prompt = f"Original User Directive: \"{original_prompt}\"\n\nPreceding Reports:\n{multi_layered_report_structure}\n\nSynthesize the final 'Quantum Oracle Analysis and Genesis Command' section to complete the report."
 
